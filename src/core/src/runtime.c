@@ -107,7 +107,7 @@ int liquid_runtime_supported_x86(liquid_cpuinfo _q)
     bool has_sse42 = (c & (1u << 20)) != 0; // SSE4.2
     bool has_mmx   = (d & (1u << 23)) != 0; // MMX
     bool has_avx   = (c & (1u << 28)) != 0; // AVX
-    //bool has_fma   = (c & (1u << 12)) != 0; // FMA (not asked, but often tied to AVX2/AVX)
+    bool has_fma   = (c & (1u << 12)) != 0; // FMA3
     bool has_osxsave = (c & (1u << 27)) != 0; // check if operating system supports the xsave/xrstor mechanism for extended CPU state
 
     // AVX requires OS support for YMM state via xgetbv
@@ -135,7 +135,7 @@ int liquid_runtime_supported_x86(liquid_cpuinfo _q)
     _q->sse41   = has_sse41;
     _q->sse42   = has_sse42;
     _q->avx     = avx_ok;
-    _q->fma3    = false;    // TODO: check for this
+    _q->fma3    = avx_ok && has_fma; // FMA3 uses the same VEX encoding as AVX
     _q->avx2    = avx_ok && has_avx2;
     _q->avx512  = has_avx512f;
     _q->amx101  = false;    // TODO: check for this

@@ -70,8 +70,6 @@ int dotprod_cccf_execute_neon_1(dotprod_cccf    _q,
     float32x4_t v;   // input vector
     float32x4_t hi;  // coefficients vector (real)
     float32x4_t hq;  // coefficients vector (imag)
-    float32x4_t ci;  // output multiplication (v * hi)
-    float32x4_t cq;  // output multiplication (v * hq)
 
     // output accumulators
     float zeros[4] = {0,0,0,0};
@@ -94,13 +92,9 @@ int dotprod_cccf_execute_neon_1(dotprod_cccf    _q,
         hi = vld1q_f32(&_q->hi[i]);
         hq = vld1q_f32(&_q->hq[i]);
 
-        // compute parallel multiplications
-        ci = vmulq_f32(v, hi);
-        cq = vmulq_f32(v, hq);
-
-        // parallel addition
-        sumi = vaddq_f32(sumi, ci);
-        sumq = vaddq_f32(sumq, cq);
+        // fused multiply-accumulate (real and imag coefficient products)
+        sumi = vmlaq_f32(sumi, v, hi);
+        sumq = vmlaq_f32(sumq, v, hq);
     }
 
     // unload and combine
@@ -124,7 +118,6 @@ int dotprod_cccf_execute_neon_1(dotprod_cccf    _q,
 }
 
 // use ARM Neon extensions (unrolled loop)
-// NOTE: unrolling doesn't show any appreciable performance difference
 int dotprod_cccf_execute_neon_4(dotprod_cccf    _q,
                                 float complex * _x,
                                 float complex * _y)
@@ -139,13 +132,14 @@ int dotprod_cccf_execute_neon_4(dotprod_cccf    _q,
     float32x4_t v0,  v1,  v2,  v3;   // input vectors
     float32x4_t hi0, hi1, hi2, hi3;  // coefficients vectors (real)
     float32x4_t hq0, hq1, hq2, hq3;  // coefficients vectors (imag)
-    float32x4_t ci0, ci1, ci2, ci3;  // output multiplications (v * hi)
-    float32x4_t cq0, cq1, cq2, cq3;  // output multiplications (v * hq)
 
-    // load zeros into sum registers
+    // load zeros into sum registers (independent accumulator pairs so the
+    // unrolled iterations do not serialize on a single accumulator)
     float zeros[4] = {0,0,0,0};
-    float32x4_t sumi = vld1q_f32(zeros);
-    float32x4_t sumq = vld1q_f32(zeros);
+    float32x4_t sumi = vld1q_f32(zeros), sumi1 = vld1q_f32(zeros);
+    float32x4_t sumi2 = vld1q_f32(zeros), sumi3 = vld1q_f32(zeros);
+    float32x4_t sumq = vld1q_f32(zeros), sumq1 = vld1q_f32(zeros);
+    float32x4_t sumq2 = vld1q_f32(zeros), sumq3 = vld1q_f32(zeros);
 
     // r = 4*floor(n/16)
     unsigned int r = (n >> 4) << 2;
@@ -170,25 +164,17 @@ int dotprod_cccf_execute_neon_4(dotprod_cccf    _q,
         hq1 = vld1q_f32(&_q->hq[4*i+4]);
         hq2 = vld1q_f32(&_q->hq[4*i+8]);
         hq3 = vld1q_f32(&_q->hq[4*i+12]);
-        
-        // compute parallel multiplications (real)
-        ci0 = vmulq_f32(v0, hi0);
-        ci1 = vmulq_f32(v1, hi1);
-        ci2 = vmulq_f32(v2, hi2);
-        ci3 = vmulq_f32(v3, hi3);
 
-        // compute parallel multiplications (imag)
-        cq0 = vmulq_f32(v0, hq0);
-        cq1 = vmulq_f32(v1, hq1);
-        cq2 = vmulq_f32(v2, hq2);
-        cq3 = vmulq_f32(v3, hq3);
-
-        // accumulate
-        sumi = vaddq_f32(sumi, ci0);    sumq = vaddq_f32(sumq, cq0);
-        sumi = vaddq_f32(sumi, ci1);    sumq = vaddq_f32(sumq, cq1);
-        sumi = vaddq_f32(sumi, ci2);    sumq = vaddq_f32(sumq, cq2);
-        sumi = vaddq_f32(sumi, ci3);    sumq = vaddq_f32(sumq, cq3);
+        // fused multiply-accumulate into independent accumulator pairs
+        sumi  = vmlaq_f32(sumi,  v0, hi0);    sumq  = vmlaq_f32(sumq,  v0, hq0);
+        sumi1 = vmlaq_f32(sumi1, v1, hi1);    sumq1 = vmlaq_f32(sumq1, v1, hq1);
+        sumi2 = vmlaq_f32(sumi2, v2, hi2);    sumq2 = vmlaq_f32(sumq2, v2, hq2);
+        sumi3 = vmlaq_f32(sumi3, v3, hi3);    sumq3 = vmlaq_f32(sumq3, v3, hq3);
     }
+
+    // combine the independent accumulator pairs
+    sumi = vaddq_f32(vaddq_f32(sumi, sumi1), vaddq_f32(sumi2, sumi3));
+    sumq = vaddq_f32(vaddq_f32(sumq, sumq1), vaddq_f32(sumq2, sumq3));
 
     // unload
     float wi[4];

@@ -39,6 +39,7 @@ int DOTPROD(_execute_port)  (DOTPROD() _q, TI * _x, TO * _y);
 int DOTPROD(_execute_neon)  (DOTPROD() _q, TI * _x, TO * _y);
 int DOTPROD(_execute_sse)   (DOTPROD() _q, TI * _x, TO * _y);
 int DOTPROD(_execute_avx)   (DOTPROD() _q, TI * _x, TO * _y);
+int DOTPROD(_execute_fma3)  (DOTPROD() _q, TI * _x, TO * _y);
 int DOTPROD(_execute_avx512)(DOTPROD() _q, TI * _x, TO * _y);
 
 // portable structured dot product object
@@ -293,6 +294,10 @@ int DOTPROD(_runtime_select)(DOTPROD()        _q,
         liquid_log_trace("dotprod_%s_runtime_select(), avx", EXTENSION_FULL);
         _q->execute = &DOTPROD(_execute_avx);
         return LIQUID_OK;
+    case LIQUID_RUNTIME_FMA3:
+        liquid_log_trace("dotprod_%s_runtime_select(), fma3", EXTENSION_FULL);
+        _q->execute = &DOTPROD(_execute_fma3);
+        return LIQUID_OK;
     case LIQUID_RUNTIME_AVX512:
         liquid_log_trace("dotprod_%s_runtime_select(), avx512", EXTENSION_FULL);
         _q->execute = &DOTPROD(_execute_avx512);
@@ -338,7 +343,7 @@ int DOTPROD(_runtime_detect)(DOTPROD() _q)
         .sse41   = 0,
         .sse42   = 0,
         .avx     = true,
-        .fma3    = 0,
+        .fma3    = true,
         .avx2    = 0,
         .avx512  = true,
         .amx     = 0,

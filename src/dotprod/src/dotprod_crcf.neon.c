@@ -50,8 +50,7 @@ int dotprod_crcf_execute_neon_1(dotprod_crcf    _q,
     // first cut: ...
     float32x4_t v;   // input vector
     float32x4_t h;   // coefficients vector
-    float32x4_t s;   // dot product
-    
+
     // load zeros into sum register
     float zeros[4] = {0,0,0,0};
     float32x4_t sum = vld1q_f32(zeros);
@@ -68,11 +67,8 @@ int dotprod_crcf_execute_neon_1(dotprod_crcf    _q,
         // load coefficients into register (aligned)
         h = vld1q_f32(&_q->h[i]);
 
-        // compute multiplication
-        s = vmulq_f32(h,v);
-
-        // accumulate
-        sum = vaddq_f32(sum, s);
+        // fused multiply-accumulate
+        sum = vmlaq_f32(sum, h, v);
     }
 
     // unload packed array
@@ -108,7 +104,6 @@ int dotprod_crcf_execute_neon_4(dotprod_crcf    _q,
     // first cut: ...
     float32x4_t v0, v1, v2, v3;  // input vectors
     float32x4_t h0, h1, h2, h3;  // coefficients vectors
-    float32x4_t s0, s1, s2, s3;  // dot products [re, im, re, im]
 
     // load zeros into sum registers
     float zeros[4] = {0,0,0,0};
@@ -135,17 +130,11 @@ int dotprod_crcf_execute_neon_4(dotprod_crcf    _q,
         h2 = vld1q_f32(&_q->h[4*i+8]);
         h3 = vld1q_f32(&_q->h[4*i+12]);
 
-        // compute multiplication
-        s0 = vmulq_f32(v0, h0);
-        s1 = vmulq_f32(v1, h1);
-        s2 = vmulq_f32(v2, h2);
-        s3 = vmulq_f32(v3, h3);
-        
-        // parallel addition
-        sum0 = vaddq_f32( sum0, s0 );
-        sum1 = vaddq_f32( sum1, s1 );
-        sum2 = vaddq_f32( sum2, s2 );
-        sum3 = vaddq_f32( sum3, s3 );
+        // fused multiply-accumulate
+        sum0 = vmlaq_f32( sum0, v0, h0 );
+        sum1 = vmlaq_f32( sum1, v1, h1 );
+        sum2 = vmlaq_f32( sum2, v2, h2 );
+        sum3 = vmlaq_f32( sum3, v3, h3 );
     }
 
     // fold down into sum0

@@ -151,6 +151,28 @@ SET(AVX_CODE "
   }
 ")
 
+SET(FMA3_CODE "
+  #include <immintrin.h>
+  int main()
+  {
+    // fused multiply-add is a separate CPU feature from AVX2; a chip can
+    // have AVX + FMA3 without AVX2 (e.g. AMD Piledriver/Steamroller), so
+    // this must be tested on its own rather than folded into the AVX2 flags
+    float _v[8] = { 0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f,};
+    float _h[8] = { 1.f,-1.f, 1.f,-1.f, 1.f,-1.f, 1.f,-1.f,};
+    float _c[8] = { 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f, 1.f,};
+    __m256 v = _mm256_loadu_ps(_v);
+    __m256 h = _mm256_loadu_ps(_h);
+    __m256 c = _mm256_loadu_ps(_c);
+    __m256 s = _mm256_fmadd_ps(v, h, c);
+    // unload packed array
+    volatile float w[8];
+    _mm256_storeu_ps((float*)w, s);
+    return (w[ 0]== 1.f && w[ 1]== 0.f && w[ 2]== 3.f && w[ 3]== -2.f &&
+            w[ 4]== 5.f && w[ 5]== -4.f && w[ 6]== 7.f && w[ 7]== -6.f) ? 0 : 1;
+  }
+")
+
 SET(AVX2_CODE "
   #include <immintrin.h>
   int main()
@@ -234,7 +256,7 @@ CHECK_SIMD(C "SSSE3"    " ;-mssse3;/arch:AVX")  # NOTE: MSVC probably invalid
 CHECK_SIMD(C "SSE41"    " ;-msse4.1;/arch:AVX") # NOTE: MSVC probably invalid
 CHECK_SIMD(C "SSE42"    " ;-msse4.2;/arch:AVX") # NOTE: MSVC probably invalid
 CHECK_SIMD(C "AVX"      " ;-mavx;/arch:AVX")
-set(C_FMA3_FOUND 0)
+CHECK_SIMD(C "FMA3"     " ;-mfma;/arch:AVX2")   # NOTE: MSVC probably invalid
 CHECK_SIMD(C "AVX2"     " ;-mavx2 -mfma -mf16c;/arch:AVX2")
 CHECK_SIMD(C "AVX512"   " ;-mavx512f -mavx512dq -mavx512vl -mavx512bw -mfma;/arch:AVX512")
 set(C_AMX_FOUND 0)
@@ -252,7 +274,7 @@ CHECK_SIMD(CXX "SSSE3"  " ;-mssse3;/arch:AVX")  # NOTE: MSVC probably invalid
 CHECK_SIMD(CXX "SSE41"  " ;-msse4.1;/arch:AVX") # NOTE: MSVC probably invalid
 CHECK_SIMD(CXX "SSE42"  " ;-msse4.2;/arch:AVX") # NOTE: MSVC probably invalid
 CHECK_SIMD(CXX "AVX"    " ;-mavx;/arch:AVX")
-set(CXX_FMA3_FOUND 0)
+CHECK_SIMD(CXX "FMA3"   " ;-mfma;/arch:AVX2")   # NOTE: MSVC probably invalid
 CHECK_SIMD(CXX "AVX2"   " ;-mavx2 -mfma -mf16c;/arch:AVX2")
 CHECK_SIMD(CXX "AVX512" " ;-mavx512f -mavx512dq -mavx512vl -mavx512bw -mfma;/arch:AVX512")
 set(CXX_AMX_FOUND 0)

@@ -109,10 +109,12 @@ dotprod_crcf_execute_avx_4(dotprod_crcf    _q,
     // first cut: ...
     __m256 v0, v1, v2, v3;  // input vectors
     __m256 h0, h1, h2, h3;  // coefficients vectors
-    __m256 s0, s1, s2, s3;  // dot products [re, im, re, im]
 
-    // load zeros into sum registers
-    __m256 sum = _mm256_setzero_ps();
+    // four independent accumulators to break the dependency chain
+    __m256 sum0 = _mm256_setzero_ps();
+    __m256 sum1 = _mm256_setzero_ps();
+    __m256 sum2 = _mm256_setzero_ps();
+    __m256 sum3 = _mm256_setzero_ps();
 
     // r = 8*floor(n/32)
     unsigned int r = (n >> 5) << 3;
@@ -132,18 +134,24 @@ dotprod_crcf_execute_avx_4(dotprod_crcf    _q,
         h2 = _mm256_load_ps(&_q->h[4*i+16]);
         h3 = _mm256_load_ps(&_q->h[4*i+24]);
 
-        // compute multiplication
-        s0 = _mm256_mul_ps(v0, h0);
-        s1 = _mm256_mul_ps(v1, h1);
-        s2 = _mm256_mul_ps(v2, h2);
-        s3 = _mm256_mul_ps(v3, h3);
-        
-        // parallel addition
-        sum = _mm256_add_ps( sum, s0 );
-        sum = _mm256_add_ps( sum, s1 );
-        sum = _mm256_add_ps( sum, s2 );
-        sum = _mm256_add_ps( sum, s3 );
+        // multiply and accumulate into independent registers
+        sum0 = _mm256_add_ps( sum0, _mm256_mul_ps(v0, h0) );
+        sum1 = _mm256_add_ps( sum1, _mm256_mul_ps(v1, h1) );
+        sum2 = _mm256_add_ps( sum2, _mm256_mul_ps(v2, h2) );
+        sum3 = _mm256_add_ps( sum3, _mm256_mul_ps(v3, h3) );
     }
+
+    // process remaining blocks of 8; the loop above only handles full
+    // blocks of 32, so without this a partial block of up to 31 elements
+    // would otherwise fall straight to the scalar cleanup loop below
+    unsigned int j = 4*r;
+    unsigned int t = (n >> 3) << 3;
+    for (; j<t; j+=8)
+        sum0 = _mm256_add_ps(sum0, _mm256_mul_ps(_mm256_loadu_ps(&x[j]), _mm256_load_ps(&_q->h[j])));
+
+    // combine the independent accumulators
+    __m256 sum = _mm256_add_ps(_mm256_add_ps(sum0, sum1),
+                               _mm256_add_ps(sum2, sum3));
 
     // aligned output array
     float w[8] __attribute__((aligned(32)));
@@ -154,7 +162,7 @@ dotprod_crcf_execute_avx_4(dotprod_crcf    _q,
     w[1] += w[3] + w[5] + w[7];
 
     // cleanup (note: n _must_ be even)
-    for (i=4*r; i<n; i+=2) {
+    for (i=j; i<n; i+=2) {
         w[0] += x[i  ] * _q->h[i  ];
         w[1] += x[i+1] * _q->h[i+1];
     }

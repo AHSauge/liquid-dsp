@@ -237,6 +237,12 @@ else
             ARCH_OPTION='-mavx'
         fi;
 
+        # check for FMA3 (a separate CPU feature from AVX2; some chips have
+        # AVX + FMA3 without AVX2, e.g. AMD Piledriver/Steamroller)
+        if [ test "$ax_cv_have_fma3_ext" = yes ]; then
+            BUILD_FMA3="1"
+        fi;
+
         # check for AVX2
         if [ test "$ax_cv_have_avx2_ext" = yes ]; then
             BUILD_AVX2="1"
